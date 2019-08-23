@@ -16,19 +16,28 @@ class Parser implements IParser
         $this->saver = $saver;
     }
 
-    public function parse($url)
+    public function parse($url, $options)
     {
         $this->domain = $this->getDomain($url);
 
-        $this->path = $this->config['storageDir'] . $this->domain . '.csv';
+        foreach ($options as $key=>$option) {
+            $arr = $this->getArray($url, $key, $option);
 
-        $arr = $this->getArray($url, 'img', array('src'));
-
-        if ($arr) {
-            $saver = new SaverCVS();
-            $saver->save($arr, $this->path);
-            $this->displayCSVPath($this->path);
+            if ($arr) {
+                $saver = new SaverCVS();
+                $saver->save($arr, $this->path);
+                $this->displayCSVPath($this->path);
+            }
+            $this->arr = [];
         }
+
+//        $arr2 = $this->getArray($url, 'section', array('class'));
+//
+//        if ($arr2) {
+//            $saver2 = new SaverCVS();
+//            $saver2->save($arr2, $this->path);
+//            $this->displayCSVPath($this->path);
+//        }
     }
 
     private function displayCSVPath($path)
@@ -46,8 +55,11 @@ class Parser implements IParser
         try {
             $this->domain = $this->getDomain($domain);
             if (glob($this->config['storageDir'] . $this->domain . "*.csv")) {
-                $report = $this->getInfoAboutDomain(glob($this->config['storageDir'] . $this->domain . "*.csv"));
-                $this->displayCSVPath(glob($this->config['storageDir'] . $this->domain . "*.csv")[0]);
+                $rs = glob($this->config['storageDir'] . $this->domain . "*.csv");
+                foreach ($rs as $r) {
+                    $this->displayCSVPath($r);
+                }
+
             } else {
                 throw new \Exception("You have not domain '" . $this->domain . "' in your database, at first use 'parse " . $this->domain . "'");
             }
@@ -81,6 +93,7 @@ class Parser implements IParser
                         $this->getArray($href, $tag, $attributes);
                     }
                 }
+                $this->path = $this->config['storageDir'] . $this->domain . "-" . $tag . '.csv';
                 return $this->arr;
             } else {
                 throw new \Exception("You entered wrong url parameter");

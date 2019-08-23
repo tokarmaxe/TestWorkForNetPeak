@@ -22,7 +22,10 @@ class Program
             $this->prepareUrl();
             switch ($this->params[1]) {
                 case "parse":
-                    $this->parser->parse($this->params[2]);
+                    $this->parser->parse($this->params[2], array(
+                        'img' => ['src'],
+                        'section' => ['class']
+                    ));
                     break;
                 case "report":
                     $this->parser->report($this->params[2]);
