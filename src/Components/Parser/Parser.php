@@ -30,14 +30,6 @@ class Parser implements IParser
             }
             $this->arr = [];
         }
-
-//        $arr2 = $this->getArray($url, 'section', array('class'));
-//
-//        if ($arr2) {
-//            $saver2 = new SaverCVS();
-//            $saver2->save($arr2, $this->path);
-//            $this->displayCSVPath($this->path);
-//        }
     }
 
     private function displayCSVPath($path)
