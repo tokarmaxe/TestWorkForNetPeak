@@ -3,133 +3,128 @@
 
 namespace src\Components\Parser;
 
+use src\Components\Saver\SaverCVS;
+use src\Components\Saver\ISaver;
+
 class Parser implements IParser
 {
-    private $arr, $domain;
+    private $arr, $domain, $hrefs, $imagesSrc, $path, $config, $saver;
 
-    public function parseUrls($url)
+    public function __construct(ISaver $saver)
     {
-        $imagesSrc = array();
-        $hrefs = array();
-        $html = file_get_contents($url);
-        $dom = new \DOMDocument();
-        @$dom->loadHTML($html);
-        $dom->preserveWhiteSpace = false;
-        $images = $dom->getElementsByTagName('img');
-        $as = $dom->getElementsByTagName('a');
-        $k = 0;
-        foreach ($images as $image) {
-            if ($image->getAttribute('src')) {
-                $imagesSrc[$k]['src'] = $image->getAttribute('src');
-                $imagesSrc[$k]['alt'] = $image->getAttribute('alt');
-            }
-            $k++;
-        }
-        foreach ($as as $a) {
-            if (stripos($a->getAttribute('href'), "spektr.webcat.com.ua")) {
-                if (!in_array($a->getAttribute('href'), $hrefs))
-                    $hrefs[] = $a->getAttribute('href');
-            }
-        }
-        //echo "".count($hrefs)."\n";
-        //var_dump($imagesSrc);
-
-        $i = 0;
-        foreach ($imagesSrc as $src) {
-            $this->arr[$url]['images'][$i][] = $url;
-            $this->arr[$url]['images'][$i][] = $src['src'];
-            $this->arr[$url]['images'][$i][] = "title";
-            $this->arr[$url]['images'][$i][] = $src['alt'];
-            $i++;
-        }
-
-        foreach ($hrefs as $href) {
-            if (!array_key_exists($href, $this->arr)) {
-                $this->parseUrls($href);
-            }
-        }
-        return $this->arr;
+        $this->config = require_once('configs/config.php');
+        $this->saver = $saver;
     }
 
     public function parse($url)
     {
         $this->domain = $this->getDomain($url);
 
-        $arr = $this->parseUrls($url);
+        $this->path = $this->config['storageDir'] . $this->domain . '.csv';
 
-        //var_dump($arr);
-        //for ($i = 0; $i < count($arr); $i++) {
-        //foreach ($arr as $url) {
-        //mkdir(dirname(str_replace(array("http://", "https://"),null,$arr[$i])), 0777, true);
-        $fp = fopen("data/".$this->domain, 'w');
+        $arr = $this->getArray($url, 'img', array('src'));
 
-        //fputcsv($fp, array_keys(current($arr)));
-        foreach ($arr as $img) {
-            foreach ($img as $item) {
-                foreach ($item as $src) {
-                    fputcsv($fp, $src);
-                }
-            }
-            //fputcsv($fp, $img);
+        if ($arr) {
+            $saver = new SaverCVS();
+            $saver->save($arr, $this->path);
+            $this->displayCSVPath($this->path);
         }
-
-        fclose($fp);
-        chmod("data/".$this->domain, 0777);
-
-
-        //echo "$arr[$i]\n";
-        //}
-//        $imagesSrc = array();
-//        $hrefs = array();
-//        $html = file_get_contents($url);
-//        $dom = new \DOMDocument();
-//        @$dom->loadHTML($html);
-//        $dom->preserveWhiteSpace = false;
-//        $images = $dom->getElementsByTagName('img');
-//        $as = $dom->getElementsByTagName('a');
-//        foreach ($images as $image) {
-//            if ($image->getAttribute('src')) {
-//                $imagesSrc[] = $image->getAttribute('src');
-//            }
-//        }
-//        foreach ($as as $a) {
-//            if (stripos($a->getAttribute('href'), "spektr.webcat.com.ua")) {
-//                if (!in_array($a->getAttribute('href'), $hrefs))
-//                    $hrefs[] = $a->getAttribute('href');
-//            }
-//        }
-//        //var_dump($imagesSrc);
-//        foreach ($imagesSrc as $src) {
-//            $this->arr[$url][] = $src;
-//        }
-//
-//        foreach ($hrefs as $href) {
-//            if (!array_key_exists($href, $this->arr)) {
-//                $this->parse($href);
-//            }
-//        }
-//
-//        //var_dump($hrefs);
-//        //var_dump($this->arr);
-//        //
-//        echo "Soqa";
-
-
-        //chmod("google.com.csv", 0777);
     }
 
-    public function getArr()
+    private function displayCSVPath($path)
     {
-        return $this->arr;
+        print("Results are located along this path: " . realpath($path) . "\n");
+    }
+
+    private function getInfoAboutDomain($path)
+    {
+        return $this->saver->get($path[0]);
     }
 
     public function report($domain)
     {
-        echo "report";
+        try {
+            $this->domain = $this->getDomain($domain);
+            if (glob($this->config['storageDir'] . $this->domain . "*.csv")) {
+                $report = $this->getInfoAboutDomain(glob($this->config['storageDir'] . $this->domain . "*.csv"));
+                $this->displayCSVPath(glob($this->config['storageDir'] . $this->domain . "*.csv")[0]);
+            } else {
+                throw new \Exception("You have not domain '" . $this->domain . "' in your database, at first use 'parse " . $this->domain . "'");
+            }
+        } catch (\Exception $e) {
+            echo $e->getMessage() . "\n";
+        }
     }
 
     private function getDomain($url)
     {
         return explode("/", $url)[2];
+    }
+
+    private function getArray($url, $tag, $attributes)
+    {
+        try {
+            if (@file_get_contents($url)) {
+                $this->hrefs = array();
+                $this->imagesSrc = array();
+                $html = file_get_contents($url);
+                $dom = new \DOMDocument();
+                @$dom->loadHTML($html);
+                $dom->preserveWhiteSpace = false;
+                $this->getTag($dom, $tag, $attributes);
+                $this->getPageHrefs($dom);
+
+                $this->fillArray($url, $tag, $attributes);
+
+                foreach ($this->hrefs as $href) {
+                    if (!array_key_exists($href, $this->arr)) {
+                        $this->getArray($href, $tag, $attributes);
+                    }
+                }
+                return $this->arr;
+            } else {
+                throw new \Exception("You entered wrong url parameter");
+            }
+        } catch (\Exception $e) {
+            echo $e->getMessage() . "\n";
+        }
+
+    }
+
+    private function getTag($dom, $tag, $attributes)
+    {
+        $items = $dom->getElementsByTagName($tag);
+        $k = 0;
+        foreach ($items as $item) {
+            foreach ($attributes as $attribute) {
+                if ($item->getAttribute($attribute)) {
+                    $this->imagesSrc[$k][$attribute] = $item->getAttribute($attribute);
+                }
+            }
+            $k++;
+        };
+    }
+
+    private function getPageHrefs($dom)
+    {
+        $as = $dom->getElementsByTagName('a');
+        foreach ($as as $a) {
+            if (stripos($a->getAttribute('href'), $this->domain)) {
+                if (!in_array($a->getAttribute('href'), $this->hrefs))
+                    $this->hrefs[] = $a->getAttribute('href');
+            }
+        }
+    }
+
+    private function fillArray($url, $tag, $attributes)
+    {
+        $i = 0;
+        foreach ($this->imagesSrc as $src) {
+            $this->arr[$url][$tag . 's'][$i][] = $url;
+            foreach ($attributes as $attribute) {
+                $this->arr[$url][$tag . 's'][$i][] = @$src[$attribute];
+            }
+            $i++;
+        }
     }
 }

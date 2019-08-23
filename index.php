@@ -4,6 +4,7 @@ require_once 'vendor/autoload.php';
 
 use src\Components\Parser\IParser;
 use src\Components\Parser\Parser;
+use src\Components\Saver\SaverCVS;
 
 class Program
 {
@@ -13,7 +14,6 @@ class Program
     {
         $this->parser = $parser;
         $this->params = $params;
-        $this->config = require_once('configs/config.php');
     }
 
     public function execute()
@@ -22,9 +22,7 @@ class Program
             $this->prepareUrl();
             switch ($this->params[1]) {
                 case "parse":
-                    //var_dump($this->params[2]);
                     $this->parser->parse($this->params[2]);
-                    //$this->parser->getArr();
                     break;
                 case "report":
                     $this->parser->report($this->params[2]);
@@ -43,10 +41,10 @@ class Program
 
     private function prepareUrl()
     {
-        $url = str_replace(array('http://', 'https://'),null, $this->params[2]);
-        $this->params[2] = 'http://'.$url;
+        $url = str_replace(array('http://', 'https://'), null, $this->params[2]);
+        $this->params[2] = 'http://' . $url;
     }
 }
 
-$program = new Program(new Parser(), $argv);
+$program = new Program(new Parser(new SaverCVS()), $argv);
 $program->execute();
